@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotating Cylinder</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            touch-action: none; /* Prevents scroll on touch devices */
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="container"></div>
+
+    <script>
+        // Set up global variables
+        let scene, camera, renderer, cylinder;
+        let mouseX = 0, mouseY = 0;
+        let windowHalfX = window.innerWidth / 2;
+        let windowHalfY = window.innerHeight / 2;
+        let textureLoader = new THREE.TextureLoader();
+        let degsToTurn;
+        const dingaudio = new Audio("./ding.mp3");
+        let playInterval;
+
+                    /**
+         * Initializes the 3D scene, camera, renderer, and objects.
+         */
+        function playAudio() {
+            dingaudio.play();
+            clearInterval(playInterval);                                                                
+        }        
+        
+        
+         function init() {
+
+
+            const container = document.getElementById('container');
+            const urlParams = new URLSearchParams(window.location.search);
+            const userResultFromUrl = urlParams.get('result');
+            let finalResult;
+            let hasUsedUrlParam = false;               
+
+            if (!hasUsedUrlParam && userResultFromUrl && (userResultFromUrl.toLowerCase() === 'heads' || userResultFromUrl.toLowerCase() === 'tails')) {
+                finalResult = userResultFromUrl.toLowerCase();
+                hasUsedUrlParam = true;
+            } else {
+                // Otherwise, perform a new random flip
+                finalResult = Math.random() < 0.5 ? 'heads' : 'tails';
+            }
+            if (finalResult === 'heads') {
+                degsToTurn = 3600;
+            } else {
+                degsToTurn = 3780;
+            }
+            // 1. Create the Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+
+            // 2. Create the Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.z = 50;
+
+            // 3. Create the Renderer
+            renderer = new THREE.WebGLRenderer({ alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff,0.5);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(20, 20, 20);
+            scene.add(pointLight);
+
+            const pointLight2 = new THREE.PointLight(0xffffff, 1);
+            pointLight2.position.set(-20, -20, -20);
+            scene.add(pointLight2);
+            
+            
+
+
+            // 4. Create the Cylinder Geometry
+            const radius = 10;
+            const height = 0.5;
+            const segments = 64; // More segments for a smoother cylinder
+            const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, height, segments);
+            THREE.ImageUtils.crossOrigin = '';
+            // Load textures for the top and bottom circles
+            const topTexture = textureLoader.load('https://raw.githubusercontent.com/r1chy10/CoinFlip/refs/heads/main/Heads2.png');
+            const bottomTexture = textureLoader.load('https://raw.githubusercontent.com/r1chy10/CoinFlip/refs/heads/main/Tails2.png');
+
+            // 5. Create the Materials with different textures/colors
+            // THREE.CylinderGeometry requires materials in this order: side, top, bottom
+            const sideMaterial = new THREE.MeshPhongMaterial({
+                color: 0xcccccc,
+                specular: 0x555555,
+                shininess: 30
+            });
+            const topMaterial = new THREE.MeshBasicMaterial({ map: topTexture });
+            const bottomMaterial = new THREE.MeshBasicMaterial({ map: bottomTexture });
+            const materials = [sideMaterial, topMaterial, bottomMaterial];
+
+            // 6. Create the Mesh with an array of materials
+            cylinder = new THREE.Mesh(cylinderGeometry, materials);
+            scene.add(cylinder);
+            // 7. Add Lighting to the Scene
+            // Set the start time for the animation
+            startTime = performance.now() / 1000;
+            cylinder.rotation.setFromVector3(new THREE.Vector3( 0, Math.PI / 2, 0));
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        /**
+         * The animation loop. It updates the cylinder's rotation and re-renders the scene.
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = performance.now() / 1000 - startTime;
+
+            // The animation logic:
+            // Stop for 5 seconds (0 - 5s)
+            // Rotate for 10 seconds (5 - 15s)
+            // Stop after 15 seconds
+            cylinder.rotation.reorder( 'YXZ' );
+            if (elapsedTime > 5 && elapsedTime <= 15) {
+                const timeInSecs = ((elapsedTime -5));
+                const timeinsecsModifier = timeInSecs * (degsToTurn / 3600);//this spins slightly faster for tails by one half
+                //scale is 5 - (time in  sec )
+                const cylScale = calculateBellCurve(timeInSecs);
+                cylinder.scale.set(cylScale,cylScale,cylScale);
+                cylinder.rotation.z = (timeinsecsModifier +0.25 ) * (2 * Math.PI);
+            } 
+            else if (elapsedTime > 15) {
+                // Clamp the rotation at the final value of a full rotation
+                const timeinsecsModifier = 10 * (degsToTurn / 3600)
+                cylinder.rotation.z = (timeinsecsModifier +0.25) * (2 * Math.PI);
+                cylinder.scale.set(1,1,1);
+            } 
+            else
+            {
+                cylinder.rotation.z = 0.25 * (2 * Math.PI);
+                cylinder.scale.set(1,1,1);
+            }       
+
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+
+        function calculateBellCurve(x) {
+            const mean = 5;
+            const standardDeviation = 1.67;
+
+            const numerator = -( (x - mean) ** 2);
+            const denominator = 2 * (standardDeviation ** 2);
+            const exponent = numerator / denominator;
+
+            // The base of the curve is 1, and the amplitude is 1.
+            return 1  + Math.exp(exponent);
+            }
+
+        /**
+         * Handles window resizing to keep the simulation responsive.
+         */
+        function onWindowResize() {
+            windowHalfX = window.innerWidth / 2;
+            windowHalfY = window.innerHeight / 2;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Start the simulation when the window loads
+        window.onload = function() {
+
+            playInterval = setInterval(playAudio, 5000); 
+            init();
+            animate();
+        };
+    </script>
+</body>
+</html>
